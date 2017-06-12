@@ -21,26 +21,17 @@
  */
 package play.modules.db;
 
-import org.hibernate.annotations.common.util.ReflectHelper;
-import org.hibernate.cfg.AnnotationConfiguration;
+import java.io.File;
+
 import org.hibernate.cfg.JDBCMetaDataConfiguration;
-import org.hibernate.cfg.NamingStrategy;
-import org.hibernate.cfg.Settings;
 import org.hibernate.cfg.reveng.DefaultReverseEngineeringStrategy;
 import org.hibernate.cfg.reveng.OverrideRepository;
 import org.hibernate.cfg.reveng.ReverseEngineeringSettings;
 import org.hibernate.cfg.reveng.ReverseEngineeringStrategy;
-import org.hibernate.tool.hbm2ddl.SchemaExport;
-import org.hibernate.tool.hbm2x.Cfg2JavaTool;
 import org.hibernate.tool.hbm2x.POJOExporter;
+
 import play.Logger;
 import play.Play;
-
-import javax.persistence.Entity;
-import java.io.File;
-import java.io.FileInputStream;
-import java.util.List;
-import java.util.Properties;
 
 public class Importer {
 

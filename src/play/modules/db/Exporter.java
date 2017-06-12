@@ -21,115 +21,189 @@
  */
 package play.modules.db;
 
-import org.hibernate.annotations.common.util.ReflectHelper;
-import org.hibernate.cfg.AnnotationConfiguration;
-import org.hibernate.cfg.NamingStrategy;
-import org.hibernate.tool.hbm2ddl.SchemaExport;
-import play.Play;
-
-import javax.persistence.Entity;
 import java.io.File;
 import java.io.FileInputStream;
+import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Properties;
 
+import javax.persistence.Entity;
+import javax.persistence.PersistenceUnit;
+
+import org.hibernate.boot.MetadataSources;
+import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
+import org.hibernate.tool.hbm2ddl.SchemaExport;
+import org.hibernate.tool.hbm2ddl.SchemaExport.Action;
+import org.hibernate.tool.schema.TargetType;
+
+import play.Logger;
+import play.Play;
+import play.db.Configuration;
+import play.db.DB;
+import play.db.jpa.JPA;
+import play.db.jpa.JPAPlugin;
+
 public class Exporter {
 
+	public static void main(String[] args) throws Exception {
 
-    public static void main(String[] args) throws Exception {
+		File root = new File(System.getProperty("application.path"));
+		Play.init(root, System.getProperty("play.id", ""));
 
-        File root = new File(System.getProperty("application.path"));
-        Play.init(root, System.getProperty("play.id", ""));
-        List<Class> entities = Play.classloader.getAnnotatedClasses(Entity.class);
-        AnnotationConfiguration cfg = new AnnotationConfiguration();
-        cfg.setProperty("hibernate.hbm2ddl.auto", "create");
-        for (Class _class : entities) {
-            cfg.addAnnotatedClass(_class);
+//		boolean script = true;
+		boolean drop = false;
+		boolean create = false;
+		boolean halt = false;
+//		boolean export = false;
+		String outFile = null;
+		String importFiles = null; // "/import.sql";
+		String propFile = null;
+		boolean format = true;
+		String delim = ";";
+
+		EnumSet<TargetType> targetTypes = EnumSet.noneOf(TargetType.class);
+		targetTypes.add(TargetType.STDOUT);
+
+		for (int i = 0; i < args.length; i++) {
+			if (args[i].startsWith("--")) {
+				if (args[i].equals("--drop")) {
+					drop = true;
+				} else if (args[i].equals("--create")) {
+					create = true;
+				} else if (args[i].equals("--haltonerror")) {
+					halt = true;
+//				} else if (args[i].equals("--export")) {
+//					export = true;				
+//				} else if (args[i].equals("--quiet")) {
+//					script = false;
+				} else if (args[i].startsWith("--output=")) {
+					targetTypes.add(TargetType.SCRIPT);
+					outFile = args[i].substring(9);
+				} else if (args[i].startsWith("--import=")) {
+					importFiles = args[i].substring(9);
+				} else if (args[i].startsWith("--properties=")) {
+					propFile = args[i].substring(13);
+				} else if (args[i].equals("--noformat")) {
+					format = false;
+				} else if (args[i].startsWith("--delimiter=")) {
+					delim = args[i].substring(12);
+//				} else if (args[i].startsWith("--config=")) {
+//					cfg.configure(args[i].substring(9));
+				} else if (args[i].startsWith("--naming=")) {
+					// cfg.setNamingStrategy(
+					// (NamingStrategy) ReflectHelper.classForName(args[i].substring(9))
+					// .newInstance()
+					// );
+				}
+			}
+		}
+		
+		String dbName = JPA.DEFAULT;
+		
+		Configuration dbConfig = new Configuration(dbName);
+		
+		StandardServiceRegistryBuilder serviceRegistryBuilder = new StandardServiceRegistryBuilder()
+				.applySettings(properties(dbName, dbConfig))
+//		        .applySetting("javax.persistence.schema-generation-connection", connection)
+		        .applySetting("hibernate.hbm2ddl.auto", "create");
+		
+		if (propFile != null) {
+			Properties props = new Properties();
+			props.load(new FileInputStream(propFile));
+			serviceRegistryBuilder.applySettings(props);
+		}
+		
+		MetadataSources metadata = new MetadataSources(serviceRegistryBuilder.build());
+			    
+		// [...] adding annotated classes to metadata here...
+//		List<Class> entities = Play.classloader.getAnnotatedClasses(Entity.class);
+		List<Class> entities = entityClasses(dbName);
+		for (Class _class : entities) {
+			metadata.addAnnotatedClass(_class);
+		}
+
+		// FIXME: Do we need this or should it be passed into the service registry?
+		Thread.currentThread().setContextClassLoader(Play.classloader);
+
+		SchemaExport se = new SchemaExport()
+				.setHaltOnError(halt)
+				.setDelimiter(delim)
+				.setFormat(format);
+		
+		if (outFile != null) {
+			se.setOutputFile(outFile);
+		}
+		
+		if (importFiles != null) {
+			se.setImportFiles(importFiles);
+		}
+		
+		Action action = (drop && create) ? Action.BOTH : drop ? Action.DROP : create ? Action.CREATE : Action.NONE;
+
+		// se.execute(script, export, drop, create);
+		se.execute(targetTypes, action, metadata.buildMetadata());
+	}
+	
+    /**
+     * @param dbName
+     * @param dbConfig
+     * @return
+     */
+    private static Properties properties(String dbName, Configuration dbConfig) {
+        Properties properties = new Properties();
+        properties.putAll(dbConfig.getProperties());
+        properties.put("javax.persistence.transaction", "RESOURCE_LOCAL");
+        properties.put("javax.persistence.provider", "org.hibernate.ejb.HibernatePersistence");
+        properties.put("hibernate.dialect", JPAPlugin.getDefaultDialect(dbConfig, dbConfig.getProperty("db.driver")));
+
+        if (!dbConfig.getProperty("jpa.ddl", Play.mode.isDev() ? "update" : "none").equals("none")) {
+            properties.setProperty("hibernate.hbm2ddl.auto", dbConfig.getProperty("jpa.ddl", "update"));
         }
-        
-        Thread.currentThread().setContextClassLoader(Play.classloader);
-        final String dialect = Play.configuration.getProperty("jpa.dialect");
-        if (dialect != null)
-            cfg.setProperty("hibernate.dialect", dialect);
 
-        final String driver = Play.configuration.getProperty("db.driver");
-        if (driver != null)
-            cfg.setProperty("hibernate.connection.driver_class", driver);
-
-        final String user = Play.configuration.getProperty("db.user");
-        if (user != null)
-            cfg.setProperty("hibernate.connection.username", user);
-
-        final String password = Play.configuration.getProperty("db.pass");
-        if (password != null)
-            cfg.setProperty("hibernate.connection.password", password);
-
-        final String url = Play.configuration.getProperty("db.url");
-        if (url != null)
-            cfg.setProperty("hibernate.connection.url", url);
-
-        boolean script = true;
-        boolean drop = false;
-        boolean create = false;
-        boolean halt = false;
-        boolean export = false;
-        String outFile = null;
-        String importFile = "/import.sql";
-        String propFile = null;
-        boolean format = true;
-        String delim = ";";
-
-        for (int i = 0; i < args.length; i++) {
-            if (args[i].startsWith("--")) {
-                if (args[i].equals("--quiet")) {
-                    script = false;
-                } else if (args[i].equals("--drop")) {
-                    drop = true;
-                } else if (args[i].equals("--create")) {
-                    create = true;
-                } else if (args[i].equals("--haltonerror")) {
-                    halt = true;
-                } else if (args[i].equals("--export")) {
-                    export = true;
-                } else if (args[i].startsWith("--output=")) {
-                    outFile = args[i].substring(9);
-                } else if (args[i].startsWith("--import=")) {
-                    importFile = args[i].substring(9);
-                } else if (args[i].startsWith("--properties=")) {
-                    propFile = args[i].substring(13);
-                } else if (args[i].equals("--noformat")) {
-                    format = false;
-                } else if (args[i].startsWith("--delimiter=")) {
-                    delim = args[i].substring(12);
-                } else if (args[i].startsWith("--config=")) {
-                    cfg.configure(args[i].substring(9));
-                } else if (args[i].startsWith("--naming=")) {
-                    cfg.setNamingStrategy(
-                            (NamingStrategy) ReflectHelper.classForName(args[i].substring(9))
-                                    .newInstance()
-                    );
-                }
-            }
-
-        }
-
-        if (propFile != null) {
-            Properties props = new Properties();
-            props.putAll(cfg.getProperties());
-            props.load(new FileInputStream(propFile));
-            cfg.setProperties(props);
-        }
-
-        SchemaExport se = new SchemaExport(cfg)
-                .setHaltOnError(halt)
-                .setOutputFile(outFile)
-                .setImportFile(importFile)
-                .setDelimiter(delim);
-        if (format) {
-            se.setFormat(true);
-        }
-        se.execute(script, export, drop, create);
+        properties.put("hibernate.connection.datasource", DB.getDataSource(dbName));
+        return properties;
     }
+    
+    /**
+     * @param dbName
+     * @return
+     */
+    private static List<Class> entityClasses(String dbName) {
+        List<Class> entityClasses = new ArrayList<>();
+        
+        List<Class> classes = Play.classloader.getAnnotatedClasses(Entity.class);
+        for (Class<?> clazz : classes) {
+            if (clazz.isAnnotationPresent(Entity.class)) {
+                // Do we have a transactional annotation matching our dbname?
+                PersistenceUnit pu = clazz.getAnnotation(PersistenceUnit.class);
+                if (pu != null && pu.name().equals(dbName)) {
+                    entityClasses.add(clazz);
+                } else if (pu == null && JPA.DEFAULT.equals(dbName)) {
+                    entityClasses.add(clazz);
+                }                    
+            }
+        }
 
-
+        // Add entities
+        String[] moreEntities = Play.configuration.getProperty("jpa.entities", "").split(", ");
+        for (String entity : moreEntities) {
+            if (entity.trim().equals("")) {
+                continue;
+            }
+            try {
+                Class<?> clazz = Play.classloader.loadClass(entity);  
+                // Do we have a transactional annotation matching our dbname?
+                PersistenceUnit pu = clazz.getAnnotation(PersistenceUnit.class);
+                if (pu != null && pu.name().equals(dbName)) {
+                    entityClasses.add(clazz);
+                } else if (pu == null && JPA.DEFAULT.equals(dbName)) {
+                    entityClasses.add(clazz);
+                }         
+            } catch (Exception e) {
+                Logger.warn(e, "JPA -> Entity not found: %s", entity);
+            }
+        }
+        return entityClasses;
+    }
 }
