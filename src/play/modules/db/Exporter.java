@@ -149,6 +149,8 @@ public class Exporter {
      * @param dbName
      * @param dbConfig
      * @return
+     * 
+     * NOTE: This has been copied from play.db.jpa.JPAPlugin
      */
     private static Properties properties(String dbName, Configuration dbConfig) {
         Properties properties = new Properties();
@@ -168,6 +170,8 @@ public class Exporter {
     /**
      * @param dbName
      * @return
+     * 
+     * NOTE: This has been copied from play.db.jpa.JPAPlugin
      */
     private static List<Class> entityClasses(String dbName) {
         List<Class> entityClasses = new ArrayList<>();
