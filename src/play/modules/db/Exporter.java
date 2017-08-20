@@ -21,7 +21,6 @@
  */
 package play.modules.db;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -39,17 +38,22 @@ import org.hibernate.tool.schema.TargetType;
 
 import play.Logger;
 import play.Play;
+import play.classloading.ApplicationClasses;
+import play.classloading.ApplicationClassloader;
 import play.db.Configuration;
 import play.db.DB;
+import play.db.DBPlugin;
 import play.db.jpa.JPA;
 import play.db.jpa.JPAPlugin;
+import play.vfs.VirtualFile;
 
 public class Exporter {
 
 	public static void main(String[] args) throws Exception {
 
-		File root = new File(System.getProperty("application.path"));
-		Play.init(root, System.getProperty("play.id", ""));
+//		File root = new File(System.getProperty("application.path"));
+//		Play.init(root, System.getProperty("play.id", ""));
+		startDBPlugin();
 
 //		boolean script = true;
 		boolean drop = false;
@@ -143,6 +147,23 @@ public class Exporter {
 
 		// se.execute(script, export, drop, create);
 		se.execute(targetTypes, action, metadata.buildMetadata());
+	}
+	
+	/**
+	 * NOTE: This has been copied from play.db.Evolutions.main(String[])
+	 */
+	private static void startDBPlugin() {
+        /** Start the DB plugin **/
+        Play.guessFrameworkPath();
+        Play.readConfiguration();
+        Play.classes = new ApplicationClasses();
+        Play.classloader = new ApplicationClassloader();
+
+        Play.loadModules(VirtualFile.open(Play.applicationPath));
+
+        Logger.init();
+        Logger.setUp("ERROR");
+        new DBPlugin().onApplicationStart();
 	}
 	
     /**
