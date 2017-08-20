@@ -32,6 +32,7 @@ import javax.persistence.PersistenceUnit;
 
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
+import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.tool.hbm2ddl.SchemaExport;
 import org.hibernate.tool.hbm2ddl.SchemaExport.Action;
 import org.hibernate.tool.schema.TargetType;
@@ -107,10 +108,14 @@ public class Exporter {
 		
 		Configuration dbConfig = new Configuration(dbName);
 		
+		// FIXME: Do we need this or should it be passed into the service registry?
+		Thread.currentThread().setContextClassLoader(Play.classloader);
+		
 		StandardServiceRegistryBuilder serviceRegistryBuilder = new StandardServiceRegistryBuilder()
+//				.applySetting(AvailableSettings.CLASSLOADERS, new HashSet<ClassLoader>(Arrays.asList(Play.classloader)))
 				.applySettings(properties(dbName, dbConfig))
-//		        .applySetting("javax.persistence.schema-generation-connection", connection)
-		        .applySetting("hibernate.hbm2ddl.auto", "create");
+//		        .applySetting(AvailableSettings.HBM2DDL_CONNECTION, connection)
+		        .applySetting(AvailableSettings.HBM2DDL_AUTO, "create");
 		
 		if (propFile != null) {
 			Properties props = new Properties();
@@ -126,9 +131,6 @@ public class Exporter {
 		for (Class _class : entities) {
 			metadata.addAnnotatedClass(_class);
 		}
-
-		// FIXME: Do we need this or should it be passed into the service registry?
-		Thread.currentThread().setContextClassLoader(Play.classloader);
 
 		SchemaExport se = new SchemaExport()
 				.setHaltOnError(halt)
