@@ -21,9 +21,12 @@
  */
 package play.modules.db;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 
@@ -52,9 +55,10 @@ public class Exporter {
 
 	public static void main(String[] args) throws Exception {
 
-//		File root = new File(System.getProperty("application.path"));
-//		Play.init(root, System.getProperty("play.id", ""));
-		startDBPlugin();
+		File root = new File(System.getProperty("application.path"));
+		String id = System.getProperty("play.id", "");
+//		Play.init(root, id);
+		startDBPlugin(root, id);
 
 //		boolean script = true;
 		boolean drop = false;
@@ -112,7 +116,7 @@ public class Exporter {
 		Thread.currentThread().setContextClassLoader(Play.classloader);
 		
 		StandardServiceRegistryBuilder serviceRegistryBuilder = new StandardServiceRegistryBuilder()
-//				.applySetting(AvailableSettings.CLASSLOADERS, new HashSet<ClassLoader>(Arrays.asList(Play.classloader)))
+				.applySetting(AvailableSettings.CLASSLOADERS, new HashSet<ClassLoader>(Arrays.asList(Play.classloader)))
 				.applySettings(properties(dbName, dbConfig))
 //		        .applySetting(AvailableSettings.HBM2DDL_CONNECTION, connection)
 		        .applySetting(AvailableSettings.HBM2DDL_AUTO, "create");
@@ -154,12 +158,22 @@ public class Exporter {
 	/**
 	 * NOTE: This has been copied from play.db.Evolutions.main(String[])
 	 */
-	private static void startDBPlugin() {
+	private static void startDBPlugin(File root, String id) {
         /** Start the DB plugin **/
+		Play.id = id;
+	    Play.started = false;
+	    Play.applicationPath = root;
         Play.guessFrameworkPath();
         Play.readConfiguration();
         Play.classes = new ApplicationClasses();
         Play.classloader = new ApplicationClassloader();
+        
+        VirtualFile appRoot = VirtualFile.open(Play.applicationPath);
+        Play.roots.clear();
+        Play.roots.add(appRoot);
+        Play.javaPath.clear();
+        Play.javaPath.add(appRoot.child("app"));
+        Play.javaPath.add(appRoot.child("conf"));
 
         Play.loadModules(VirtualFile.open(Play.applicationPath));
 
@@ -187,6 +201,7 @@ public class Exporter {
         }
 
         properties.put("hibernate.connection.datasource", DB.getDataSource(dbName));
+        
         return properties;
     }
     
@@ -231,6 +246,7 @@ public class Exporter {
                 Logger.warn(e, "JPA -> Entity not found: %s", entity);
             }
         }
+        
         return entityClasses;
     }
 }
