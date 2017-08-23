@@ -3,8 +3,8 @@ package play.modules.db;
 import java.io.File;
 
 import org.hibernate.cfg.Configuration;
-
 import org.hibernate.tool.hbm2x.GenericExporter;
+
 
 /**
  * Exporter to generate Play! Framework CRUD Controller based on Hibernate Tools exporters.
